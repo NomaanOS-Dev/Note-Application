@@ -179,9 +179,17 @@ export default function NoteModal({
   }
 
   function handleCancel() {
-    clearDraft(note?.id)
-    onClose()
+  const hasContent = title.trim() || body.trim()
+  if (hasContent) {
+    const save = window.confirm('Save this note before closing?')
+    if (save) {
+      // trigger submit programmatically
+      submit(new Event('submit'))
+      return
+    }
   }
+  onClose()
+}
 
   return (
     <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && handleCancel()}>

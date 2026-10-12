@@ -2309,3 +2309,13 @@ button {
     font-size: 11px;
   }
 }
+
+.icon-button.active,
+.topbar-actions .icon-button.active {
+  background: #e8e4f2;
+  color: #6d45cb;
+}
+.app-dark .icon-button.active {
+  background: #3a4052;
+  color: #c9b6ff;
+}

@@ -21,6 +21,7 @@ export default function Topbar({
   onMenu,
   reorderMode,
   setReorderMode,
+  setSortBy,
 }) {
   return (
     <header className="topbar">
@@ -77,7 +78,10 @@ export default function Topbar({
           <button
             type="button"
             className={`icon-button ${reorderMode ? 'active' : ''}`}
-            onClick={() => setReorderMode(v => !v)}
+            onClick={() => {
+              setReorderMode(v => !v)
+              if (setSortBy) setSortBy('manual')
+            }}
             aria-label="Toggle reorder mode"
             title={reorderMode ? 'Reordering on — drag cards to reorder' : 'Reorder notes (drag)'}
             aria-pressed={reorderMode}

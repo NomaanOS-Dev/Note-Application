@@ -87,7 +87,7 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="sidebar-brand-mark">🦁</div>
-        <div className="sidebar-brand-name">Notes's Space</div>
+        <div className="sidebar-brand-name">NomaanOS</div>
       </div>
 
       <nav className="sidebar-navigation" aria-label="Main navigation">
@@ -220,8 +220,8 @@ export default function Sidebar({
       <div className="sidebar-profile">
         <div className="sidebar-profile-status" />
         <div className="sidebar-profile-text">
-          <span className="sidebar-profile-name">Notes App</span>
-          <span className="sidebar-profile-subtitle">Personal workspace</span>
+          <span className="sidebar-profile-name">Nomaan</span>
+          <span className="sidebar-profile-subtitle">Personal OS</span>
         </div>
       </div>
     </aside>

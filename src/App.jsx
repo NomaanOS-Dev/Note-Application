@@ -525,6 +525,7 @@ export default function App() {
           onNew={newNote}
           onMenu={() => setMobileNavOpen(o => !o)}
           reorderMode={reorderMode}
+          setSortBy={setSortBy}
           setReorderMode={setReorderMode}
         />
 
@@ -580,7 +581,7 @@ export default function App() {
         )}
 
         <div className="save-status">
-          ✓ Notes, archive, and trash are saved in this browser
+          ✓ Start your first log
         </div>
       </main>
 
