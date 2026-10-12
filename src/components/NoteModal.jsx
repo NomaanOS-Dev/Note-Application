@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Bold, Italic, Underline, List, ListOrdered,
-  Trash2, X, Star, Pin, Lock, LockOpen
+  Trash2, X, Star, Pin, Lock, LockOpen, ImagePlus, RotateCcw,
 } from 'lucide-react'
+import { useDraftAutosave, loadDraft, clearDraft } from '../hooks/useDraftAutosave.js'
+import { storeImageFile } from '../hooks/useImageStore.js'
+import { useImageUrl } from '../hooks/useImageUrl.js'
 
 const COLORS = [
   ['plain', 'Paper'], ['rose', 'Rose'], ['yellow', 'Butter'], ['blue', 'Sky'],
-  ['green', 'Sage'], ['indigo', 'Periwinkle'], ['purple', 'Lilac'], ['cream', 'Cream']
+  ['green', 'Sage'], ['indigo', 'Periwinkle'], ['purple', 'Lilac'], ['cream', 'Cream'],
 ]
 const DEFAULT_CATEGORIES = ['Personal', 'Work', 'Ideas', 'Learning', 'Travel']
 
@@ -36,44 +39,60 @@ export default function NoteModal({
   const [favorite, setFavorite] = useState(Boolean(note?.favorite))
   const [pinned, setPinned] = useState(Boolean(note?.pinned))
   const [locked, setLocked] = useState(Boolean(note?.locked))
+  const [images, setImages] = useState(note?.images || [])
+  const [draftBanner, setDraftBanner] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const editor = useRef(null)
+  const fileInput = useRef(null)
+
+  useEffect(() => {
+    const draft = loadDraft(note?.id)
+    if (draft && (draft.title !== note?.title || draft.body !== note?.body)) {
+      setDraftBanner(draft)
+    }
+  }, [note?.id])
 
   useEffect(() => {
     if (editor.current) editor.current.innerHTML = body
   }, [])
 
-  // 🔒 Hard guard: a locked-but-sealed note should never render editable
+  const draftValue = {
+    title, body, color, category, folder, tagsText,
+    favorite, pinned, images,
+  }
+  useDraftAutosave(note?.id, draftValue, 2000)
+
+  function restoreDraft() {
+    if (!draftBanner) return
+    setTitle(draftBanner.title || '')
+    setBody(draftBanner.body || '')
+    if (editor.current) editor.current.innerHTML = draftBanner.body || ''
+    setColor(draftBanner.color || 'plain')
+    setCategory(draftBanner.category || 'Personal')
+    setFolder(draftBanner.folder || 'Notes')
+    setTagsText(draftBanner.tagsText || '')
+    setFavorite(Boolean(draftBanner.favorite))
+    setPinned(Boolean(draftBanner.pinned))
+    setImages(draftBanner.images || [])
+    setDraftBanner(null)
+  }
+
   if (lockedPreview) {
     return (
-      <div
-        className="modal-backdrop"
-        onMouseDown={event => event.target === event.currentTarget && onClose()}
-      >
-        <div
-          className="note-modal"
-          style={{ minHeight: 'auto', width: 'min(420px, 100%)' }}
-        >
+      <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+        <div className="note-modal" style={{ minHeight: 'auto', width: 'min(420px, 100%)' }}>
           <div className="modal-head">
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <Lock size={16} /> Encrypted note
             </span>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <X size={19} />
-            </button>
+            <button type="button" className="icon-button" onClick={onClose}><X size={19} /></button>
           </div>
           <p style={{ color: '#8a8e9a', fontSize: 13, margin: '8px 0 20px' }}>
             This note is encrypted. Close this dialog and click the note again to enter its password.
           </p>
           <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" className="primary-button" onClick={onClose}>
-              Close
-            </button>
+            <button type="button" className="primary-button" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>
@@ -86,11 +105,49 @@ export default function NoteModal({
     setBody(editor.current?.innerHTML || '')
   }
 
+  async function insertImage(file) {
+    const id = await storeImageFile(file)
+    if (!id) return
+    setImages(prev => [...prev, id])
+    const url = URL.createObjectURL(file)
+    editor.current?.focus()
+    document.execCommand(
+      'insertHTML',
+      false,
+      `<img src="${url}" alt="" style="max-width:100%;border-radius:10px;margin:8px 0;display:block" data-image-id="${id}" />`
+    )
+    setBody(editor.current?.innerHTML || '')
+  }
+
+  function handleFilePick(e) {
+    const files = Array.from(e.target.files || [])
+    files.forEach(insertImage)
+    e.target.value = ''
+  }
+
+  function handleDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    const files = Array.from(e.dataTransfer.files || [])
+    files.filter(f => f.type.startsWith('image/')).forEach(insertImage)
+  }
+
+  async function handlePaste(e) {
+    const items = Array.from(e.clipboardData?.items || [])
+    const imageFiles = items.filter(i => i.type.startsWith('image/')).map(i => i.getAsFile())
+    if (imageFiles.length) {
+      e.preventDefault()
+      for (const f of imageFiles) await insertImage(f)
+    }
+  }
+
+  function removeImage(id) {
+    setImages(prev => prev.filter(x => x !== id))
+  }
+
   function buildPayload() {
     const html = editor.current?.innerHTML || ''
-    const tags = [...new Set(
-      tagsText.split(',').map(tag => tag.trim().replace(/^#/, '')).filter(Boolean)
-    )]
+    const tags = [...new Set(tagsText.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))]
     return {
       ...note,
       title: title.trim(),
@@ -102,82 +159,89 @@ export default function NoteModal({
       favorite,
       pinned,
       locked,
+      images,
     }
   }
 
-  function submit(event) {
-    event.preventDefault()
+  function submit(e) {
+    e.preventDefault()
     if (!title.trim()) return
 
     const payload = buildPayload()
 
-    // If we're locking a note that was NOT locked before → ask for password
     if (payload.locked && !note?.locked) {
       onRequestLock(payload)
       return
     }
 
+    clearDraft(note?.id)
     onSave(payload)
   }
 
+  function handleCancel() {
+    clearDraft(note?.id)
+    onClose()
+  }
+
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={event => event.target === event.currentTarget && onClose()}
-    >
+    <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && handleCancel()}>
       <form className="note-modal organization-modal" onSubmit={submit}>
         <div className="modal-head">
           <span>
             {note ? 'Edit note & organization' : 'Create a note'}
-            {note?.locked && (
-              <span style={{ marginLeft: 8, color: '#8a8e9a', fontSize: 11 }}>
-                🔒 encrypted
-              </span>
-            )}
+            {note?.locked && <span style={{ marginLeft: 8, color: '#8a8e9a', fontSize: 11 }}>🔒 encrypted</span>}
           </span>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Close editor"
-          >
-            <X size={19} />
-          </button>
+          <button type="button" className="icon-button" onClick={handleCancel}><X size={19} /></button>
         </div>
+
+        {draftBanner && (
+          <div className="draft-banner">
+            <RotateCcw size={14} />
+            <span>You have an unsaved draft from earlier.</span>
+            <button type="button" onClick={restoreDraft}>Restore</button>
+            <button type="button" onClick={() => { clearDraft(note?.id); setDraftBanner(null) }}>Discard</button>
+          </div>
+        )}
 
         <input
           autoFocus
           className="editor-title"
           placeholder="Give your note a title..."
           value={title}
-          onChange={event => setTitle(event.target.value)}
+          onChange={e => setTitle(e.target.value)}
           required
           maxLength={180}
         />
 
         <div className="editor-toolbar">
-          {[[Bold, 'bold'], [Italic, 'italic'], [Underline, 'underline'], [List, 'insertUnorderedList'], [ListOrdered, 'insertOrderedList']].map(([Icon, command]) => (
-            <button
-              type="button"
-              key={command}
-              onClick={() => format(command)}
-              aria-label={command}
-            >
-              <Icon size={17} />
-            </button>
+          {[[Bold, 'bold'], [Italic, 'italic'], [Underline, 'underline'], [List, 'insertUnorderedList'], [ListOrdered, 'insertOrderedList']].map(([Icon, cmd]) => (
+            <button type="button" key={cmd} onClick={() => format(cmd)} aria-label={cmd}><Icon size={17} /></button>
           ))}
+          <button type="button" onClick={() => fileInput.current?.click()} aria-label="Insert image">
+            <ImagePlus size={17} />
+          </button>
+          <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={handleFilePick} />
         </div>
 
         <div
           ref={editor}
-          className="editor-body rich-editor"
+          className={`editor-body rich-editor ${dragOver ? 'drop-active' : ''}`}
           contentEditable
           role="textbox"
-          aria-label="Note content"
           aria-multiline="true"
           data-placeholder="Start writing whatever's on your mind..."
-          onInput={event => setBody(event.currentTarget.innerHTML)}
+          onInput={e => setBody(e.currentTarget.innerHTML)}
+          onDrop={handleDrop}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onPaste={handlePaste}
         />
+
+        {images.length > 0 && (
+          <div className="image-strip">
+            {images.map(id => <ImageStripItem key={id} id={id} onRemove={() => removeImage(id)} />)}
+          </div>
+        )}
 
         <div className="organization-fields">
           <div className="field-block color-field">
@@ -188,7 +252,6 @@ export default function NoteModal({
                   type="button"
                   key={value}
                   title={label}
-                  aria-label={label}
                   className={`color-swatch swatch-${value} ${color === value ? 'chosen' : ''}`}
                   onClick={() => setColor(value)}
                 />
@@ -203,75 +266,49 @@ export default function NoteModal({
                 id="note-category"
                 list="note-categories"
                 value={category}
-                onChange={event => setCategory(event.target.value)}
-                placeholder="e.g. Work"
+                onChange={e => setCategory(e.target.value)}
               />
               <datalist id="note-categories">
-                {[...new Set([...DEFAULT_CATEGORIES, ...categories])].map(value => (
-                  <option key={value} value={value} />
-                ))}
+                {[...new Set([...DEFAULT_CATEGORIES, ...categories])].map(v => <option key={v} value={v} />)}
               </datalist>
             </div>
+
             <div className="field-block">
-              <label htmlFor="note-folder">Folder</label>
+              <label htmlFor="note-folder">Folder <span>use / for nesting</span></label>
               <input
                 id="note-folder"
                 list="note-folders"
                 value={folder}
-                onChange={event => setFolder(event.target.value)}
-                placeholder="e.g. Projects"
+                onChange={e => setFolder(e.target.value)}
+                placeholder="Work/Projects/Q1"
               />
               <datalist id="note-folders">
-                {[...new Set(['Notes', ...folders])].map(value => (
-                  <option key={value} value={value} />
-                ))}
+                {[...new Set(['Notes', ...folders])].map(v => <option key={v} value={v} />)}
               </datalist>
             </div>
           </div>
 
           <div className="field-block">
-            <label htmlFor="note-tags">
-              Tags <span>separate with commas</span>
-            </label>
+            <label htmlFor="note-tags">Tags <span>separate with commas</span></label>
             <input
               id="note-tags"
               value={tagsText}
-              onChange={event => setTagsText(event.target.value)}
-              placeholder="design, ideas, read-later"
+              onChange={e => setTagsText(e.target.value)}
             />
-            {allTags.length > 0 && (
-              <small className="tag-suggestions">
-                Existing tags: {allTags.slice(0, 8).join(' · ')}
-              </small>
-            )}
           </div>
 
           <div className="flag-options">
             <label className={`flag-option ${favorite ? 'flag-on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={favorite}
-                onChange={event => setFavorite(event.target.checked)}
-              />
+              <input type="checkbox" checked={favorite} onChange={e => setFavorite(e.target.checked)} />
               <Star size={16} fill={favorite ? 'currentColor' : 'none'} /> Favorite
             </label>
             <label className={`flag-option ${pinned ? 'flag-on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={event => setPinned(event.target.checked)}
-              />
-              <Pin size={16} fill={pinned ? 'currentColor' : 'none'} /> Pin to top
+              <input type="checkbox" checked={pinned} onChange={e => setPinned(e.target.checked)} />
+              <Pin size={16} fill={pinned ? 'currentColor' : 'none'} /> Pin
             </label>
-
             <label className={`flag-option ${locked ? 'flag-on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={locked}
-                onChange={event => setLocked(event.target.checked)}
-              />
-              {locked ? <Lock size={16} /> : <LockOpen size={16} />}
-              {note?.locked ? (locked ? 'Encrypted' : 'Remove lock') : 'Lock note'}
+              <input type="checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} />
+              {locked ? <Lock size={16} /> : <LockOpen size={16} />} Lock note
             </label>
           </div>
         </div>
@@ -282,22 +319,26 @@ export default function NoteModal({
               <button
                 type="button"
                 className="delete-button"
-                onClick={() => {
-                  if (window.confirm(`Delete "${note.title}"? This cannot be undone.`)) {
-                    onDelete(note)
-                  }
-                }}
+                onClick={() => window.confirm(`Delete "${note.title}"?`) && onDelete(note)}
               >
                 <Trash2 size={15} /> Delete
               </button>
             )}
             <span>Changes save in this browser</span>
           </div>
-          <button className="primary-button" type="submit">
-            Save note
-          </button>
+          <button className="primary-button" type="submit">Save note</button>
         </div>
       </form>
+    </div>
+  )
+}
+
+function ImageStripItem({ id, onRemove }) {
+  const url = useImageUrl(id)
+  return (
+    <div className="image-strip-item">
+      {url ? <img src={url} alt="" /> : <div className="image-placeholder" />}
+      <button type="button" onClick={onRemove} aria-label="Remove image">×</button>
     </div>
   )
 }

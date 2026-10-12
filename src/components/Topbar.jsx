@@ -1,4 +1,3 @@
-
 import {
   Search,
   Moon,
@@ -8,6 +7,7 @@ import {
   Menu,
   LayoutGrid,
   List,
+  GripVertical,
 } from 'lucide-react'
 
 export default function Topbar({
@@ -19,6 +19,8 @@ export default function Topbar({
   setDark,
   onNew,
   onMenu,
+  reorderMode,
+  setReorderMode,
 }) {
   return (
     <header className="topbar">
@@ -70,6 +72,19 @@ export default function Topbar({
             <List size={18} />
           </button>
         </div>
+
+        {setReorderMode && (
+          <button
+            type="button"
+            className={`icon-button ${reorderMode ? 'active' : ''}`}
+            onClick={() => setReorderMode(v => !v)}
+            aria-label="Toggle reorder mode"
+            title={reorderMode ? 'Reordering on — drag cards to reorder' : 'Reorder notes (drag)'}
+            aria-pressed={reorderMode}
+          >
+            <GripVertical size={18} />
+          </button>
+        )}
 
         <button
           type="button"

@@ -1,11 +1,5 @@
-
 import {
-  CalendarDays,
-  Check,
-  ChevronDown,
-  ChevronRight,
   FileText,
-  Folder,
   Pin,
   SlidersHorizontal,
   Star,
@@ -15,6 +9,7 @@ import {
   Archive,
 } from 'lucide-react'
 import { useState } from 'react'
+import FolderTree from './FolderTree.jsx'
 
 export default function Sidebar({
   active = 'All Notes',
@@ -34,27 +29,24 @@ export default function Sidebar({
 
   const countFor = filter => {
     if (filter === 'All Notes') return activeNotes.length
-    if (filter === 'Favorites') {
-      return activeNotes.filter(note => note.favorite).length
-    }
-    if (filter === 'Pinned') {
-      return activeNotes.filter(note => note.pinned).length
-    }
+    if (filter === 'Favorites') return activeNotes.filter(n => n.favorite).length
+    if (filter === 'Pinned') return activeNotes.filter(n => n.pinned).length
     if (filter === 'Archive') return archiveCount
     if (filter === 'Trash') return trashCount
 
     if (filter.startsWith('Folder:')) {
-      return activeNotes.filter(note => note.folder === filter.slice(7)).length
+      const path = filter.slice(7)
+      return activeNotes.filter(n =>
+        n.folder === path || n.folder?.startsWith(path + '/')
+      ).length
     }
 
     if (filter.startsWith('Category:')) {
-      return activeNotes.filter(note => note.category === filter.slice(9)).length
+      return activeNotes.filter(n => n.category === filter.slice(9)).length
     }
 
     if (filter.startsWith('Tag:')) {
-      return activeNotes.filter(note =>
-        (note.tags || []).includes(filter.slice(4))
-      ).length
+      return activeNotes.filter(n => (n.tags || []).includes(filter.slice(4))).length
     }
 
     return null
@@ -70,7 +62,6 @@ export default function Sidebar({
       >
         <Icon size={18} className="sidebar-nav-icon" />
         <span className="sidebar-nav-label">{label}</span>
-
         {count !== null && count !== undefined && (
           <span className="sidebar-nav-count">{count}</span>
         )}
@@ -80,15 +71,14 @@ export default function Sidebar({
 
   function SectionHeading({ label, open, onToggle, count }) {
     return (
-      <button
-        type="button"
+      <button        type="button"
         className="sidebar-section-heading"
         onClick={onToggle}
         aria-expanded={open}
       >
         <span>{label}</span>
         <span className="sidebar-section-count">{count}</span>
-        {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        {open ? <span>▾</span> : <span>▸</span>}
       </button>
     )
   }
@@ -123,41 +113,49 @@ export default function Sidebar({
             selected={active === 'Pinned'}
             onClick={() => setActive('Pinned')}
           />
-          {/* <NavItem
-            label="Tasks"
-            icon={Check}
-            count={null}
-            selected={active === 'Tasks'}
-            onClick={() => setActive('Tasks')}
+        </div>
+
+        <div className="sidebar-section">
+          <SectionHeading
+            label="Folders"
+            open={foldersOpen}
+            onToggle={() => setFoldersOpen(v => !v)}
+            count={folders.length}
           />
-          <NavItem
-            label="Calendar"
-            icon={CalendarDays}
-            count={null}
-            selected={active === 'Calendar'}
-            onClick={() => setActive('Calendar')}
-          /> */}
+          {foldersOpen && (
+            <div className="sidebar-section-items">
+              {folders.length ? (
+                <FolderTree
+                  folders={folders}
+                  active={active}
+                  onSelect={setActive}
+                  countFor={countFor}
+                />
+              ) : (
+                <p className="sidebar-empty">Folders appear here.</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="sidebar-section">
           <SectionHeading
             label="Categories"
             open={categoriesOpen}
-            onToggle={() => setCategoriesOpen(value => !value)}
+            onToggle={() => setCategoriesOpen(v => !v)}
             count={categories.length}
           />
-
           {categoriesOpen && (
             <div className="sidebar-section-items">
               {categories.length ? (
-                categories.map(category => (
+                categories.map(cat => (
                   <NavItem
-                    key={category}
-                    label={category}
+                    key={cat}
+                    label={cat}
                     icon={Tags}
-                    count={countFor(`Category:${category}`)}
-                    selected={active === `Category:${category}`}
-                    onClick={() => setActive(`Category:${category}`)}
+                    count={countFor(`Category:${cat}`)}
+                    selected={active === `Category:${cat}`}
+                    onClick={() => setActive(`Category:${cat}`)}
                   />
                 ))
               ) : (
@@ -169,40 +167,11 @@ export default function Sidebar({
 
         <div className="sidebar-section">
           <SectionHeading
-            label="Folders"
-            open={foldersOpen}
-            onToggle={() => setFoldersOpen(value => !value)}
-            count={folders.length}
-          />
-
-          {foldersOpen && (
-            <div className="sidebar-section-items">
-              {folders.length ? (
-                folders.map(folder => (
-                  <NavItem
-                    key={folder}
-                    label={folder}
-                    icon={Folder}
-                    count={countFor(`Folder:${folder}`)}
-                    selected={active === `Folder:${folder}`}
-                    onClick={() => setActive(`Folder:${folder}`)}
-                  />
-                ))
-              ) : (
-                <p className="sidebar-empty">Folders appear here.</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="sidebar-section">
-          <SectionHeading
             label="Tags"
             open={tagsOpen}
-            onToggle={() => setTagsOpen(value => !value)}
+            onToggle={() => setTagsOpen(v => !v)}
             count={tags.length}
           />
-
           {tagsOpen && (
             <div className="sidebar-section-items">
               {tags.length ? (

@@ -1,5 +1,4 @@
-
-import { Sun, Moon, Palette, Database } from 'lucide-react'
+import { Sun, Moon, Palette, Database, Trash2 } from 'lucide-react'
 
 const themes = [
   { id: 'light', label: 'Light', Icon: Sun },
@@ -7,7 +6,12 @@ const themes = [
   { id: 'lavender', label: 'Lavender', Icon: Palette },
 ]
 
-export default function SettingsPanel({ theme, setTheme, notes = [] }) {
+export default function SettingsPanel({
+  theme, setTheme, notes = [], settings = {}, setSettings = () => {},
+  onEmptyTrash = () => {},
+}) {
+  const trashed = notes.filter(n => n.trashed)
+
   return (
     <section className="mx-auto max-w-3xl space-y-8 p-6 md:p-10">
       <div>
@@ -46,17 +50,50 @@ export default function SettingsPanel({ theme, setTheme, notes = [] }) {
 
       <section className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
+          <Trash2 size={18} /> Trash
+        </h2>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.autoPurge ?? true}
+            onChange={e => setSettings(s => ({ ...s, autoPurge: e.target.checked }))}
+          />
+          <span className="text-sm">
+            Automatically empty Trash after{' '}
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={settings.autoPurgeDays ?? 30}
+              onChange={e => setSettings(s => ({ ...s, autoPurgeDays: Number(e.target.value) || 30 }))}
+              style={{ width: 60, padding: '2px 6px', marginLeft: 4, marginRight: 4 }}
+            />
+            days
+          </span>
+        </label>
+
+        <div className="mt-4 flex items-center gap-3">
+          <p className="text-sm text-gray-500">
+            {trashed.length} note{trashed.length === 1 ? '' : 's'} in Trash
+          </p>
+          {trashed.length > 0 && (
+            <button className="secondary-button danger-outline" onClick={onEmptyTrash}>
+              Empty Trash now
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-gray-200 p-5 dark:border-gray-700">
+        <h2 className="mb-4 flex items-center gap-2 font-semibold">
           <Database size={18} /> Your workspace
         </h2>
-        <p className="text-sm text-gray-500">
-          Total notes: {notes.length}
-        </p>
+        <p className="text-sm text-gray-500">Total notes: {notes.length}</p>
         <p className="mt-2 text-sm text-gray-500">
           Archived: {notes.filter(n => n.archived && !n.trashed).length}
         </p>
-        <p className="mt-2 text-sm text-gray-500">
-          In trash: {notes.filter(n => n.trashed).length}
-        </p>
+        <p className="mt-2 text-sm text-gray-500">In trash: {trashed.length}</p>
         <p className="mt-4 text-xs text-gray-400">
           Your notes are stored locally in this browser.
         </p>

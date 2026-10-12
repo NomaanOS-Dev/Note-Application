@@ -5,9 +5,20 @@ import Dashboard from './components/Dashboard.jsx'
 import NoteModal from './components/NoteModal.jsx'
 import SettingsPanel from './components/SettingsPanel.jsx'
 import PasswordPrompt from './components/PasswordPrompt.jsx'
+import BulkActionsBar from './components/BulkActionsBar.jsx'
 import { encryptNote, decryptNote } from './utils/crypto.js'
+import { deleteImage } from './utils/idb.js'
 
 const STORAGE_KEY = 'notenest.notes.v1'
+const SETTINGS_KEY = 'notenest.settings.v1'
+const TRASH_TTL_DAYS = 30
+
+function makeId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  } catch {}
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
 
 function normalizeNote(note) {
   return {
@@ -20,8 +31,20 @@ function normalizeNote(note) {
     trashed: false,
     color: 'plain',
     locked: false,
+    order: 0,
+    images: [],
     ...note,
     tags: Array.isArray(note.tags) ? note.tags : [],
+    images: Array.isArray(note.images) ? note.images : [],
+  }
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    return raw ? JSON.parse(raw) : { autoPurge: true, autoPurgeDays: TRASH_TTL_DAYS }
+  } catch {
+    return { autoPurge: true, autoPurgeDays: TRASH_TTL_DAYS }
   }
 }
 
@@ -35,8 +58,21 @@ function loadNotes() {
   }
 }
 
+function purgeOldTrash(notes, days) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+  return notes.filter(note => {
+    if (!note.trashed) return true
+    const deleted = note.deletedAt ? new Date(note.deletedAt).getTime() : Date.now()
+    return deleted > cutoff
+  })
+}
+
 export default function App() {
-  const [notes, setNotes] = useState(loadNotes)
+  const [settings, setSettings] = useState(loadSettings)
+  const [notes, setNotes] = useState(() => {
+    const initial = loadNotes()
+    return settings.autoPurge ? purgeOldTrash(initial, settings.autoPurgeDays) : initial
+  })
   const [search, setSearch] = useState('')
   const [view, setView] = useState('grid')
   const [active, setActive] = useState('All Notes')
@@ -46,12 +82,14 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
-  // 🔐 Password prompt state
   const [passwordPrompt, setPasswordPrompt] = useState(null)
-  // { mode: 'set' | 'unlock', note }
-
-  // 🔓 In-memory unlocked decrypted content per note id
   const [unlockedNotes, setUnlockedNotes] = useState({})
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+
+  // Reorder mode
+  const [reorderMode, setReorderMode] = useState(false)
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -67,10 +105,15 @@ export default function App() {
     try {
       localStorage.setItem('notenest.theme', theme)
     } catch {}
-
     document.documentElement.classList.toggle('dark', dark)
     document.documentElement.dataset.theme = theme
   }, [theme, dark])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+    } catch {}
+  }, [settings])
 
   useEffect(() => {
     try {
@@ -79,6 +122,10 @@ export default function App() {
       console.error('Could not save notes in browser storage.', error)
     }
   }, [notes])
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [active])
 
   const activeNotes = useMemo(
     () => notes.filter(note => !note.trashed && !note.archived),
@@ -134,7 +181,10 @@ export default function App() {
             active === 'Pinned' ? note.pinned :
               active === 'Untagged' ? !(note.tags || []).length :
                 active === 'Archive' || active === 'Trash' ? true :
-                  active.startsWith('Folder:') ? note.folder === active.slice(7) :
+                  active.startsWith('Folder:') ? (
+                    note.folder === active.slice(7) ||
+                    note.folder?.startsWith(active.slice(7) + '/')
+                  ) :
                     active.startsWith('Category:') ? note.category === active.slice(9) :
                       active.startsWith('Tag:') ? (note.tags || []).includes(active.slice(4)) :
                         true
@@ -147,21 +197,17 @@ export default function App() {
         return new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0)
       }
 
+      if (sortBy === 'manual') {
+        return (a.order ?? 0) - (b.order ?? 0)
+      }
+
       if (a.pinned !== b.pinned && !['Archive', 'Trash'].includes(active)) {
         return a.pinned ? -1 : 1
       }
 
-      if (sortBy === 'title') {
-        return (a.title || '').localeCompare(b.title || '')
-      }
-
-      if (sortBy === 'created') {
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
-      }
-
-      if (sortBy === 'color') {
-        return (a.color || '').localeCompare(b.color || '')
-      }
+      if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '')
+      if (sortBy === 'created') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+      if (sortBy === 'color') return (a.color || '').localeCompare(b.color || '')
 
       return new Date(b.updatedAt || b.createdAt || 0) -
         new Date(a.updatedAt || a.createdAt || 0)
@@ -171,86 +217,57 @@ export default function App() {
   async function saveNote(note) {
     const now = new Date().toISOString()
 
-    // 🔐 Locked note — encrypt and strip all plaintext
     if (note.locked) {
       const password = note.__password
       if (!password) return
 
       const encrypted = await encryptNote(note, password)
-
       const meta = normalizeNote({
         ...note,
         title: '🔒 Locked note',
         body: '',
         tags: [],
+        images: [],
         items: [],
         type: 'text',
         locked: true,
         encrypted,
         updatedAt: now,
         updated: 'Encrypted just now',
-        archived: note.archived || false,
-        trashed: false,
       })
       delete meta.__password
       delete meta.decrypted
 
       if (note.id) {
-        setNotes(current =>
-          current.map(item =>
-            item.id === note.id ? { ...item, ...meta } : item
-          )
-        )
-        const { __password, ...safeDraft } = note
-        setUnlockedNotes(current => ({
-          ...current,
-          [note.id]: { ...safeDraft, locked: true },
-        }))
+        setNotes(cur => cur.map(n => (n.id === note.id ? { ...n, ...meta } : n)))
+        const { __password, ...safe } = note
+        setUnlockedNotes(cur => ({ ...cur, [note.id]: { ...safe, locked: true } }))
       } else {
-        const id = globalThis.crypto?.randomUUID?.() || String(Date.now())
-        const newNote = { ...meta, id, createdAt: now }
-        setNotes(current => [newNote, ...current])
-        const { __password, ...safeDraft } = note
-        setUnlockedNotes(current => ({
-          ...current,
-          [id]: { ...safeDraft, id, locked: true },
-        }))
+        const id = makeId()
+        setNotes(cur => [{ ...meta, id, createdAt: now, order: Date.now() }, ...cur])
+        const { __password, ...safe } = note
+        setUnlockedNotes(cur => ({ ...cur, [id]: { ...safe, id, locked: true } }))
       }
     } else {
-      // Normal unencrypted save
       const normalized = normalizeNote({
         ...note,
         updatedAt: now,
         updated: 'Edited just now',
-        archived: note.archived || false,
-        trashed: false,
       })
       delete normalized.__password
       delete normalized.encrypted
 
       if (note.id) {
-        setNotes(current =>
-          current.map(item =>
-            item.id === note.id ? { ...item, ...normalized } : item
-          )
-        )
-        setUnlockedNotes(current => {
-          const next = { ...current }
+        setNotes(cur => cur.map(n => (n.id === note.id ? { ...n, ...normalized } : n)))
+        setUnlockedNotes(cur => {
+          const next = { ...cur }
           delete next[note.id]
           return next
         })
       } else {
-        setNotes(current => [
-          {
-            ...normalized,
-            id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
-            createdAt: now,
-            updatedAt: now,
-            updated: 'Created just now',
-            type: 'text',
-            items: [],
-          },
-          ...current,
+        setNotes(cur => [
+          { ...normalized, id: makeId(), createdAt: now, order: Date.now() },
+          ...cur,
         ])
       }
     }
@@ -260,80 +277,157 @@ export default function App() {
   }
 
   function deleteNote(note) {
-    setNotes(current =>
-      current.map(item =>
-        item.id === note.id
-          ? { ...item, trashed: true, archived: false, deletedAt: new Date().toISOString() }
-          : item
-      )
-    )
+    setNotes(cur => cur.map(n => n.id === note.id
+      ? { ...n, trashed: true, archived: false, deletedAt: new Date().toISOString() }
+      : n))
     setModalOpen(false)
     setEditing(null)
   }
 
   function toggleFlag(note, field) {
-    setNotes(current =>
-      current.map(item =>
-        item.id === note.id
-          ? { ...item, [field]: !item[field], updatedAt: new Date().toISOString() }
-          : item
-      )
-    )
+    setNotes(cur => cur.map(n => n.id === note.id
+      ? { ...n, [field]: !n[field], updatedAt: new Date().toISOString() }
+      : n))
   }
 
   function archiveNote(note) {
-    setNotes(current =>
-      current.map(item =>
-        item.id === note.id
-          ? { ...item, archived: true, trashed: false, archivedAt: new Date().toISOString() }
-          : item
-      )
-    )
+    setNotes(cur => cur.map(n => n.id === note.id
+      ? { ...n, archived: true, trashed: false, archivedAt: new Date().toISOString() }
+      : n))
   }
 
   function restoreNote(note) {
-    setNotes(current =>
-      current.map(item =>
-        item.id === note.id
-          ? {
-              ...item,
-              archived: false,
-              trashed: false,
-              deletedAt: null,
-              archivedAt: null,
-              updatedAt: new Date().toISOString(),
-            }
-          : item
-      )
-    )
+    setNotes(cur => cur.map(n => n.id === note.id
+      ? {
+          ...n,
+          archived: false,
+          trashed: false,
+          deletedAt: null,
+          archivedAt: null,
+          updatedAt: new Date().toISOString(),
+        }
+      : n))
   }
 
   function moveToTrash(note) {
-    setNotes(current =>
-      current.map(item =>
-        item.id === note.id
-          ? { ...item, trashed: true, archived: false, deletedAt: new Date().toISOString() }
-          : item
-      )
-    )
+    setNotes(cur => cur.map(n => n.id === note.id
+      ? { ...n, trashed: true, archived: false, deletedAt: new Date().toISOString() }
+      : n))
   }
 
-  function permanentlyDelete(note) {
-    if (window.confirm(`Permanently delete "${note.title}"? This cannot be undone.`)) {
-      setNotes(current => current.filter(item => item.id !== note.id))
-      setUnlockedNotes(current => {
-        const next = { ...current }
-        delete next[note.id]
-        return next
-      })
+  async function permanentlyDelete(note) {
+    if (!window.confirm(`Permanently delete "${note.title}"? This cannot be undone.`)) return
+    for (const id of note.images || []) {
+      try { await deleteImage(id) } catch {}
     }
+    setNotes(cur => cur.filter(n => n.id !== note.id))
+    setUnlockedNotes(cur => {
+      const next = { ...cur }
+      delete next[note.id]
+      return next
+    })
   }
 
   function emptyTrash() {
-    if (window.confirm('Permanently delete all notes in Trash? This cannot be undone.')) {
-      setNotes(current => current.filter(item => !item.trashed))
-      setUnlockedNotes({})
+    if (!window.confirm('Permanently delete all notes in Trash? This cannot be undone.')) return
+    setNotes(cur => cur.filter(n => !n.trashed))
+    setUnlockedNotes({})
+  }
+
+  function duplicateNote(note) {
+    const copy = {
+      ...note,
+      id: makeId(),
+      title: `${note.title || 'Untitled'} (copy)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updated: 'Duplicated just now',
+      order: Date.now(),
+      favorite: false,
+      pinned: false,
     }
+    delete copy.encrypted
+    delete copy.__password
+
+    if (note.locked) {
+      copy.locked = false
+      copy.title = `${note.title} (copy)`
+    }
+
+    setNotes(cur => [copy, ...cur])
+  }
+
+  function reorderNotes(orderedIds) {
+    setNotes(cur => {
+      const indexOf = new Map(orderedIds.map((id, i) => [id, i]))
+      return cur.map(n => indexOf.has(n.id) ? { ...n, order: indexOf.get(n.id) } : n)
+    })
+  }
+
+  function toggleSelect(id) {
+    setSelectedIds(cur => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  function bulkFavorite() {
+    setNotes(cur => cur.map(n =>
+      selectedIds.has(n.id) ? { ...n, favorite: true, updatedAt: new Date().toISOString() } : n
+    ))
+    clearSelection()
+  }
+
+  function bulkPin() {
+    setNotes(cur => cur.map(n =>
+      selectedIds.has(n.id) ? { ...n, pinned: true, updatedAt: new Date().toISOString() } : n
+    ))
+    clearSelection()
+  }
+
+  function bulkAddTag() {
+    const tag = window.prompt('Tag name to add to selected notes:')
+    if (!tag) return
+    const clean = tag.trim().replace(/^#/, '')
+    setNotes(cur => cur.map(n => {
+      if (!selectedIds.has(n.id)) return n
+      const tags = new Set([...(n.tags || []), clean])
+      return { ...n, tags: [...tags], updatedAt: new Date().toISOString() }
+    }))
+    clearSelection()
+  }
+
+  function bulkArchive() {
+    setNotes(cur => cur.map(n => selectedIds.has(n.id)
+      ? { ...n, archived: true, trashed: false, archivedAt: new Date().toISOString() }
+      : n))
+    clearSelection()
+  }
+
+  function bulkTrash() {
+    setNotes(cur => cur.map(n => selectedIds.has(n.id)
+      ? { ...n, trashed: true, archived: false, deletedAt: new Date().toISOString() }
+      : n))
+    clearSelection()
+  }
+
+  function bulkRestore() {
+    setNotes(cur => cur.map(n => selectedIds.has(n.id)
+      ? { ...n, archived: false, trashed: false, deletedAt: null, archivedAt: null }
+      : n))
+    clearSelection()
+  }
+
+  function bulkDeleteForever() {
+    if (!window.confirm(`Permanently delete ${selectedIds.size} notes?`)) return
+    setNotes(cur => cur.filter(n => !selectedIds.has(n.id)))
+    clearSelection()
   }
 
   function newNote() {
@@ -348,7 +442,6 @@ export default function App() {
     setMobileNavOpen(false)
   }
 
-  // 🔐 Open a note — locked notes must be unlocked first
   function openNote(note) {
     if (note.locked) {
       const decrypted = unlockedNotes[note.id]
@@ -357,25 +450,17 @@ export default function App() {
         return
       }
       setEditing({ ...note, ...decrypted, locked: true })
-      setModalOpen(true)
-      setMobileNavOpen(false)
-      return
+    } else {
+      setEditing(note)
     }
-
-    setEditing(note)
     setModalOpen(true)
     setMobileNavOpen(false)
   }
 
-  // 🔐 Called from NoteModal when user toggles "Lock note" and clicks Save
   function requestLockNote(noteDraft) {
-    setPasswordPrompt({
-      mode: 'set',
-      note: noteDraft,
-    })
+    setPasswordPrompt({ mode: 'set', note: noteDraft })
   }
 
-  // 🔐 Handle password prompt submit
   async function handlePasswordSubmit(password) {
     const prompt = passwordPrompt
     if (!prompt) return
@@ -390,14 +475,11 @@ export default function App() {
     if (prompt.mode === 'unlock') {
       try {
         const decrypted = await decryptNote(prompt.note.encrypted, password)
-        setUnlockedNotes(current => ({
-          ...current,
-          [prompt.note.id]: decrypted,
-        }))
+        setUnlockedNotes(cur => ({ ...cur, [prompt.note.id]: decrypted }))
         setPasswordPrompt(null)
         setEditing({ ...prompt.note, ...decrypted, locked: true })
         setModalOpen(true)
-      } catch (err) {
+      } catch {
         setPasswordPrompt(p => ({ ...p, error: 'Wrong password. Try again.' }))
       }
     }
@@ -406,6 +488,9 @@ export default function App() {
   const editingLockedSealed = Boolean(
     editing && editing.locked && !unlockedNotes[editing.id]
   )
+
+  const selectionCount = selectedIds.size
+  const selectionMode = active === 'Trash' ? 'trash' : active === 'Archive' ? 'archive' : 'normal'
 
   return (
     <div className={`app-shell ${dark ? 'app-dark' : ''} ${theme === 'lavender' ? 'app-lavender' : ''}`}>
@@ -436,16 +521,35 @@ export default function App() {
           view={view}
           setView={setView}
           dark={dark}
-          setDark={value => setTheme(value ? 'dark' : 'light')}
+          setDark={v => setTheme(v ? 'dark' : 'light')}
           onNew={newNote}
-          onMenu={() => setMobileNavOpen(open => !open)}
+          onMenu={() => setMobileNavOpen(o => !o)}
+          reorderMode={reorderMode}
+          setReorderMode={setReorderMode}
         />
+
+        {selectionCount > 0 && (
+          <BulkActionsBar
+            count={selectionCount}
+            onClear={clearSelection}
+            mode={selectionMode}
+            onFavorite={bulkFavorite}
+            onPin={bulkPin}
+            onAddTag={bulkAddTag}
+            onArchive={bulkArchive}
+            onTrash={selectionMode === 'trash' ? bulkDeleteForever : bulkTrash}
+            onRestore={bulkRestore}
+          />
+        )}
 
         {active === 'Settings' ? (
           <SettingsPanel
             theme={theme}
             setTheme={setTheme}
             notes={notes}
+            settings={settings}
+            setSettings={setSettings}
+            onEmptyTrash={emptyTrash}
           />
         ) : (
           <Dashboard
@@ -463,10 +567,15 @@ export default function App() {
             onTrash={moveToTrash}
             onPermanentDelete={permanentlyDelete}
             onEmptyTrash={emptyTrash}
+            onDuplicate={duplicateNote}
             categoryFilter={categoryFilter}
             setCategoryFilter={setCategoryFilter}
             categories={categories}
             unlockedNotes={unlockedNotes}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            reorderMode={reorderMode}
+            onReorder={reorderNotes}
           />
         )}
 
@@ -475,7 +584,7 @@ export default function App() {
         </div>
       </main>
 
-      {modalOpen && editing && (
+      {modalOpen && (
         <NoteModal
           note={editing}
           lockedPreview={editingLockedSealed}

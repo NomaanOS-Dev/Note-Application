@@ -1959,3 +1959,353 @@ button {
   font-family: monospace;
   letter-spacing: 2px;
 }
+
+/* ========================================
+   BULK ACTIONS BAR
+   ======================================== */
+
+.bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 36px 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--nest-accent-soft, #eee8ff);
+  color: var(--nest-text, #202033);
+  box-shadow: 0 4px 14px rgb(80 60 200 / 10%);
+  flex-wrap: wrap;
+}
+
+.bulk-actions-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bulk-actions-info strong {
+  font-size: 13px;
+}
+
+.bulk-actions-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bulk-actions-bar .secondary-button {
+  background: #fff;
+}
+
+.app-dark .bulk-actions-bar {
+  background: #303647;
+}
+
+.app-dark .bulk-actions-bar .secondary-button {
+  background: #252a38;
+  border-color: #3a4052;
+  color: #d9deea;
+}
+
+/* ========================================
+   NOTE CARD — selection & drag
+   ======================================== */
+
+.note-card-heading {
+  align-items: center;
+}
+
+.note-select-checkbox {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  accent-color: #6d45cb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.note-selected {
+  box-shadow: 0 0 0 2px #6d45cb, 0 12px 24px #30395012;
+  transform: translateY(-2px);
+}
+
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #8d91a0;
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle:hover {
+  background: #ffffff99;
+}
+
+/* ========================================
+   CARD MENU (3-dot dropdown)
+   ======================================== */
+
+.card-menu-wrap {
+  position: relative;
+}
+
+.card-menu {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  z-index: 30;
+  min-width: 170px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #e5e8ef;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgb(30 30 50 / 15%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #333846;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-menu button:hover {
+  background: #f4f6fb;
+}
+
+.card-menu button.danger {
+  color: #c35f67;
+}
+
+.app-dark .card-menu {
+  background: #252a38;
+  border-color: #3a4052;
+}
+
+.app-dark .card-menu button {
+  color: #d9deea;
+}
+
+.app-dark .card-menu button:hover {
+  background: #303647;
+}
+
+/* ========================================
+   FOLDER TREE
+   ======================================== */
+
+.folder-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+}
+
+.folder-node {
+  width: 100%;
+}
+
+.folder-node-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  border-radius: 8px;
+}
+
+.folder-node-row.active {
+  background: var(--nest-accent-soft, #eee8ff);
+}
+
+.folder-caret,
+.folder-caret-spacer {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: #8d91a0;
+  flex-shrink: 0;
+}
+
+.folder-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px 6px 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.folder-label span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-label small {
+  margin-left: auto;
+  color: #9893a7;
+  font-size: 10px;
+}
+
+/* ========================================
+   IMAGES
+   ======================================== */
+
+.note-images {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.note-thumb {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e4e5e9;
+}
+
+.note-image-more {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: #f0edf7;
+  font-size: 12px;
+  color: #6d45cb;
+}
+
+.image-strip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0;
+  overflow-x: auto;
+}
+
+.image-strip-item {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.image-strip-item img,
+.image-placeholder {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #e4e5e9;
+}
+
+.image-placeholder {
+  background: #f4f6fb;
+}
+
+.image-strip-item button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #d05d65;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rich-editor.drop-active {
+  outline: 2px dashed #a5adc7;
+  outline-offset: 4px;
+  border-radius: 10px;
+  background: #f8f6ff;
+}
+
+.app-dark .rich-editor.drop-active {
+  background: #2a2f42;
+}
+
+/* ========================================
+   DRAFT BANNER
+   ======================================== */
+
+.draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #7a5a1c;
+  font-size: 12px;
+}
+
+.draft-banner span {
+  flex: 1;
+}
+
+.draft-banner button {
+  border: 0;
+  background: transparent;
+  color: #6d45cb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-dark .draft-banner {
+  background: #4a422c;
+  color: #f0d48a;
+}
+
+@media (max-width: 760px) {
+  .bulk-actions-bar {
+    margin: 0 17px 12px;
+    padding: 8px 10px;
+  }
+
+  .bulk-actions-buttons .secondary-button {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}

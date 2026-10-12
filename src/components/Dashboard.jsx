@@ -1,4 +1,16 @@
 import { Plus, Grid2X2, List, ArrowDownUp, Star, Archive, Trash2 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  rectSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
 import NoteCard from './NoteCard.jsx'
 
 const titles = {
@@ -6,24 +18,40 @@ const titles = {
   'Favorites': ['Your favorites', 'The notes you want to find again quickly.'],
   'Pinned': ['Pinned notes', 'Keep your most important thoughts close.'],
   'Archive': ['Archive', 'Notes tucked away but never lost.'],
-  'Trash': ['Trash', 'Deleted notes stay here until you permanently remove them.']
+  'Trash': ['Trash', 'Deleted notes stay here until you permanently remove them.'],
 }
 
 export default function Dashboard({
   notes, view, setView, onNew, onOpen, active, sortBy, setSortBy,
   onToggleFlag, onArchive, onRestore, onTrash, onPermanentDelete, onEmptyTrash,
-  categoryFilter, setCategoryFilter, categories = [], unlockedNotes = {}
+  onDuplicate, categoryFilter, setCategoryFilter, categories = [],
+  unlockedNotes = {}, selectedIds = new Set(), onToggleSelect,
+  reorderMode = false, onReorder,
 }) {
   const isArchive = active === 'Archive'
   const isTrash = active === 'Trash'
+
   const heading = active.startsWith('Folder:') ? active.slice(7) :
     active.startsWith('Category:') ? active.slice(9) :
     active.startsWith('Tag:') ? `# ${active.slice(4)}` :
     (titles[active]?.[0] || active)
+
   const subtitle = active.startsWith('Folder:') ? 'Everything kept in this folder.' :
     active.startsWith('Category:') ? 'Notes grouped by category.' :
     active.startsWith('Tag:') ? 'Notes marked with this tag.' :
     (titles[active]?.[1] || 'A tidy space for all your thoughts.')
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const isSortable = reorderMode && sortBy === 'manual' && !isArchive && !isTrash && view === 'grid'
+  const ids = notes.map(n => n.id)
+
+  function handleDragEnd(event) {
+    const { active: dragged, over } = event
+    if (!over || dragged.id === over.id) return
+    const oldIndex = ids.indexOf(dragged.id)
+    const newIndex = ids.indexOf(over.id)
+    onReorder?.(arrayMove(ids, oldIndex, newIndex))
+  }
 
   return (
     <section className="dashboard">
@@ -58,13 +86,11 @@ export default function Dashboard({
               <span>Category</span>
               <select
                 value={categoryFilter}
-                onChange={event => setCategoryFilter(event.target.value)}
+                onChange={e => setCategoryFilter(e.target.value)}
                 aria-label="Filter by category"
               >
                 <option value="">All</option>
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
           )}
@@ -72,13 +98,14 @@ export default function Dashboard({
             <ArrowDownUp size={15} />
             <select
               value={sortBy}
-              onChange={event => setSortBy(event.target.value)}
+              onChange={e => setSortBy(e.target.value)}
               aria-label="Sort notes"
             >
               <option value="updated">Recently updated</option>
               <option value="created">Recently created</option>
               <option value="title">Title A–Z</option>
               <option value="color">By color</option>
+              <option value="manual">Manual (drag)</option>
             </select>
           </label>
           {!isArchive && !isTrash && (
@@ -103,22 +130,52 @@ export default function Dashboard({
       </div>
 
       {notes.length ? (
-        <div className={view === 'grid' && !isArchive && !isTrash ? 'notes-grid' : 'notes-list'}>
-          {notes.map(note => (
-            <NoteCard
-              key={note.id}
-              note={note}
-              onClick={() => onOpen(note)}
-              onToggleFlag={onToggleFlag}
-              mode={isTrash ? 'trash' : isArchive ? 'archive' : 'normal'}
-              onArchive={onArchive}
-              onRestore={onRestore}
-              onTrash={onTrash}
-              onPermanentDelete={onPermanentDelete}
-              unlocked={unlockedNotes[note.id]}
-            />
-          ))}
-        </div>
+        isSortable ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={ids} strategy={rectSortingStrategy}>
+              <div className="notes-grid">
+                {notes.map(note => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    onClick={() => onOpen(note)}
+                    onToggleFlag={onToggleFlag}
+                    mode={isTrash ? 'trash' : isArchive ? 'archive' : 'normal'}
+                    onArchive={onArchive}
+                    onRestore={onRestore}
+                    onTrash={onTrash}
+                    onPermanentDelete={onPermanentDelete}
+                    onDuplicate={onDuplicate}
+                    unlocked={unlockedNotes[note.id]}
+                    selected={selectedIds.has(note.id)}
+                    onToggleSelect={onToggleSelect}
+                    sortable
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <div className={view === 'grid' && !isArchive && !isTrash ? 'notes-grid' : 'notes-list'}>
+            {notes.map(note => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                onClick={() => onOpen(note)}
+                onToggleFlag={onToggleFlag}
+                mode={isTrash ? 'trash' : isArchive ? 'archive' : 'normal'}
+                onArchive={onArchive}
+                onRestore={onRestore}
+                onTrash={onTrash}
+                onPermanentDelete={onPermanentDelete}
+                onDuplicate={onDuplicate}
+                unlocked={unlockedNotes[note.id]}
+                selected={selectedIds.has(note.id)}
+                onToggleSelect={onToggleSelect}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <div className="empty-state">
           <div className="empty-icon">
