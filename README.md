@@ -388,12 +388,6 @@ In your repository:
 2. Select **Pages**.
 3. Configure the publishing source to use the `gh-pages` branch and its root directory, if that matches your deployment configuration.
 
-The expected URL is:
-
-```text
-https://YOUR_USERNAME.github.io/nomaanos/
-```
-
 Replace the username and repository name with your actual values.
 
 ---
@@ -467,9 +461,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 **Nomaan**
 
-GitHub: [YOUR_USERNAME](https://github.com/YOUR_USERNAME)
-
-Replace `YOUR_USERNAME` with your GitHub username.
+GitHub: [NomaanOS-Dev](https://github.com/NomaanOS-Dev)
 
 ---
 
