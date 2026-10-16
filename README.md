@@ -1,13 +1,11 @@
-Here's a complete `README.md` you can drop into your project root. It's written to look professional on GitHub and covers everything: features, stack, setup, deployment, and roadmap.
-
 ---
 
 ```markdown
 # NomaanOS
 
-> A personal notes operating system — encrypted, offline-first, and entirely yours.
+> A personal notes operating system — encrypted, and entirely yours.
 
-NomaanOS is a private workspace for thoughts, notes, and ideas. Everything is
+`NomaanOS` is a private workspace for thoughts, notes, and ideas. Everything is
 stored locally in your browser. Nothing is uploaded, nothing is tracked, and
 every note you mark as private is encrypted with AES-256 before it touches disk.
 
@@ -151,7 +149,7 @@ nomaanos/
 | 🎨 Styling | Vanilla CSS + Tailwind v4 |
 | 🖼️ Icons | Lucide React |
 | 🎯 Drag & drop | `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` |
-| 💾 Client storage | `localStorage` + IndexedDB via `idb` |
+| 💾 Client storage | `localStorage` |
 | 🔐 Cryptography | Web Crypto API (native) |
 | ✍️ Fonts | DM Sans, Manrope |
 
