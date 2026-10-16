@@ -52,8 +52,6 @@ combines the speed of a native app with the privacy of a paper journal.
 - **Zero network calls** — nothing leaves your browser, ever
 
 ### Media & UX
-- **Image attachments** — drag and drop images into the editor, stored in IndexedDB
-- **Image thumbnails** on note cards
 - **Drag-and-drop reordering** with manual sort mode
 - **Three themes** — Light, Dark, and Lavender (with CSS-variable theming for future themes)
 - **Mobile-first navigation** with a slide-out drawer
@@ -62,7 +60,7 @@ combines the speed of a native app with the privacy of a paper journal.
 ### System
 - **Offline-first** — the entire app runs without a server
 - **Trash auto-purge** — optionally empty trash after N days
-- **Persistent storage** — everything saves to `localStorage` (metadata) and IndexedDB (images)
+- **Persistent storage** — everything saves to `localStorage` (metadata)
 
 ---
 
